@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Capchase ROI Calculator</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; background: #f4f4f4; }
+    h1 { color: #333; }
+    .container { background: white; padding: 2rem; border-radius: 8px; max-width: 800px; margin: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    label { display: block; margin-top: 1rem; font-weight: bold; }
+    input, select { width: 100%; padding: 0.5rem; margin-top: 0.25rem; border-radius: 4px; border: 1px solid #ccc; }
+    button { margin-top: 1.5rem; padding: 0.75rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    .result { margin-top: 2rem; font-size: 1.2rem; font-weight: bold; }
+    .chart-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 2rem; }
+    canvas { background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 0 8px rgba(0,0,0,0.1); }
+    table { width: 100%; margin-top: 2rem; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: center; }
+    th { background-color: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Capchase ROI Calculator</h1>
+    <label for="annualDeals">Annual Contracts Closed per quarter</label>
+    <input type="number" id="annualDeals" value="100" />
+    <label for="twoYearDeals">24-Month Contracts Closed per quarter</label>
+    <input type="number" id="twoYearDeals" value="60" />
+    <label for="threeYearDeals">36-Month Contracts Closed per quarter</label>
+    <input type="number" id="threeYearDeals" value="40" />
+    <label for="percentFinanced">% of Deals Financed</label>
+    <input type="number" id="percentFinanced" value="8" />
+    <label for="vendorDiscountRate">Average Discount (%)</label>
+    <input type="number" id="vendorDiscountRate" value="22" />
+    <label for="financingFee">Financing Fee (% of deal)</label>
+    <input type="number" id="financingFee" value="8" />
+    <label for="averageContractValue">Average Contract Value (ACV)</label>
+    <input type="number" id="averageContractValue" value="40000" />
+    <label for="accelerationBoost">Incremental Deals Sold by Offering Monthly Payments (%)</label>
+    <input type="number" id="accelerationBoost" value="10" />
+    <label for="dealAcceleration">Financed Deals Close Faster By (%)</label>
+    <input type="number" id="dealAcceleration" value="20" />
+    <button onclick="calculateROI()">Calculate ROI</button>
+    <button onclick="downloadChart('roiChart', 'Quarterly_ROI_Chart')">Download Quarterly Chart</button>
+    <button onclick="downloadChart('roiYearChart', 'Annual_ROI_Chart')">Download Annual Chart</button>
+    <button onclick="exportToCSV()">Download CSV</button>
+    <div class="result" id="roiResult"></div>
+    <div class="chart-grid">
+      <canvas id="roiChart" width="400" height="300"></canvas>
+      <canvas id="roiYearChart" width="400" height="300"></canvas>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th>Quarterly</th>
+          <th>Annual</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Discount Savings</td><td id="qDiscount"></td><td id="aDiscount"></td></tr>
+        <tr><td>Financing Cost</td><td id="qFinancing"></td><td id="aFinancing"></td></tr>
+        <tr><td>Deal Volume Boost</td><td id="qVolume"></td><td id="aVolume"></td></tr>
+        <tr><td>Deal Speed Value</td><td id="qSpeed"></td><td id="aSpeed"></td></tr>
+        <tr><td>Total ROI</td><td id="qTotal"></td><td id="aTotal"></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <script>
+    let chart;
+    let yearChart;
+    function exportToCSV() {
+      const rows = [
+        ['Metric', 'Quarterly', 'Annual'],
+        ['Discount Savings', qDiscount.innerText, aDiscount.innerText],
+        ['Financing Cost', qFinancing.innerText, aFinancing.innerText],
+        ['Deal Volume Boost', qVolume.innerText, aVolume.innerText],
+        ['Deal Speed Value', qSpeed.innerText, aSpeed.innerText],
+        ['Total ROI', qTotal.innerText, aTotal.innerText]
+      ];
+      const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("
+");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "roi_results.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    function downloadChart(chartId, filename) {
+      const link = document.createElement('a');
+      link.download = filename + '.png';
+      link.href = document.getElementById(chartId).toDataURL('image/png');
+      link.click();
+    }
+    function calculateROI() {
+      const annualDeals = parseFloat(document.getElementById('annualDeals').value);
+      const twoYearDeals = parseFloat(document.getElementById('twoYearDeals').value);
+      const threeYearDeals = parseFloat(document.getElementById('threeYearDeals').value);
+      const percentFinanced = parseFloat(document.getElementById('percentFinanced').value) / 100;
+      const vendorDiscountRate = parseFloat(document.getElementById('vendorDiscountRate').value) / 100;
+      const financingFee = parseFloat(document.getElementById('financingFee').value) / 100;
+      const acv = parseFloat(document.getElementById('averageContractValue').value);
+      const accelerationBoost = parseFloat(document.getElementById('accelerationBoost').value) / 100;
+      const dealAcceleration = parseFloat(document.getElementById('dealAcceleration').value) / 100;
+      const totalDeals = annualDeals + twoYearDeals + threeYearDeals;
+      const financedDeals = totalDeals * percentFinanced;
+      const discountSavings = financedDeals * acv * vendorDiscountRate;
+      const annualFinancingCost = annualDeals * percentFinanced * acv * financingFee;
+      const twoYearFinancingCost = twoYearDeals * percentFinanced * acv * financingFee * 2;
+      const threeYearFinancingCost = threeYearDeals * percentFinanced * acv * financingFee * 3;
+      const financingCost = annualFinancingCost + twoYearFinancingCost + threeYearFinancingCost;
+      const additionalDeals = totalDeals * accelerationBoost;
+      const revenueFromAcceleration = additionalDeals * acv;
+      const dealAccelerationValue = financedDeals * acv * dealAcceleration;
+      const totalROI = discountSavings - financingCost + revenueFromAcceleration + dealAccelerationValue;
+      const annualROI = totalROI * 4;
+      document.getElementById('roiResult').innerText = `Estimated ROI this quarter: $${totalROI.toLocaleString()}`;
+      document.getElementById('qDiscount').innerText = `$${discountSavings.toLocaleString()}`;
+      document.getElementById('aDiscount').innerText = `$${(discountSavings * 4).toLocaleString()}`;
+      document.getElementById('qFinancing').innerText = `-$${financingCost.toLocaleString()}`;
+      document.getElementById('aFinancing').innerText = `-$${(financingCost * 4).toLocaleString()}`;
+      document.getElementById('qVolume').innerText = `$${revenueFromAcceleration.toLocaleString()}`;
+      document.getElementById('aVolume').innerText = `$${(revenueFromAcceleration * 4).toLocaleString()}`;
+      document.getElementById('qSpeed').innerText = `$${dealAccelerationValue.toLocaleString()}`;
+      document.getElementById('aSpeed').innerText = `$${(dealAccelerationValue * 4).toLocaleString()}`;
+      document.getElementById('qTotal').innerText = `$${totalROI.toLocaleString()}`;
+      document.getElementById('aTotal').innerText = `$${annualROI.toLocaleString()}`;
+      const chartData = [
+        discountSavings,
+        -annualFinancingCost,
+        -twoYearFinancingCost,
+        -threeYearFinancingCost,
+        revenueFromAcceleration,
+        dealAccelerationValue
+      ];
+      const labels = [
+        'Discount Savings',
+        'Annual Contract Financing Cost',
+        '24-Month Contract Financing Cost',
+        '36-Month Contract Financing Cost',
+        'Deal Volume Boost',
+        'Faster Deal Closing Value'
+      ];
+      const ctx1 = document.getElementById('roiChart').getContext('2d');
+      const ctx2 = document.getElementById('roiYearChart').getContext('2d');
+      if (!chart) {
+        chart = new Chart(ctx1, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{ label: 'Quarterly ROI', data: chartData, backgroundColor: 'rgba(54, 162, 235, 0.6)' }]
+          },
+          options: {
+            responsive: true,
+            animation: { duration: 800 },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      } else {
+        chart.data.datasets[0].data = chartData;
+        chart.update();
+      }
+      const annualData = chartData.map(v => v * 4);
+      if (!yearChart) {
+        yearChart = new Chart(ctx2, {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{ label: 'Annual ROI', data: annualData, backgroundColor: 'rgba(255, 159, 64, 0.6)' }]
+          },
+          options: {
+            responsive: true,
+            animation: { duration: 800 },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      } else {
+        yearChart.data.datasets[0].data = annualData;
+        yearChart.update();
+      }
+    }
+  </script>
+</body>
+</html>
